@@ -1,5 +1,4 @@
 from Scraper import Scraper
-#from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -66,8 +65,10 @@ class TwitterScraper(Scraper):
     def scrape(self):
         """
         Main method that scrapes data from twitter into a form where it can be written to a .csv file.
+        
         Concatenates url, query and tab variables to display search results in chrome
         """
+        self.csv_writer(None, 'w')
         self.fully_qualified_domain = self.url + self.query + self.tab
         driver = self.initialise_webdriver(self.fully_qualified_domain)
         while not self.end_of_scroll_region and self.sample_size > 0:
@@ -75,7 +76,7 @@ class TwitterScraper(Scraper):
             # tweets = soup.find_all("div", attrs={
             #     "css-901oao r-1fmj7o5 r-1qd0xha r-a023e6 r-16dba41 r-ad9z0x r-bcqeeo r-bnwqim r-qvutc0"})
             cards = self.collect_all_tweets_from_current_view(driver, 10)
-            
+
             for card in cards:
                 if self.sample_size < 1:
                     break
@@ -84,31 +85,35 @@ class TwitterScraper(Scraper):
                         tweet = self.extract_data_from_current_tweet_card(card)
                         tweet_id = self.generate_tweet_id(tweet)
                         self.twitter_post.add(tweet_id)
+                        self.csv_writer(tweet, 'a+')
                         self.sample_size -= 1
                         print("Tweets remaining: " + str(self.sample_size))
                     except ex.DuplicateTweetError:
                         print("\n***duplicate tweet detected***\n")
 
-                self.last_position, end_of_scroll_region = self.scroll_down_page(driver, self.last_position)
-                sleep(1)
+            self.last_position, end_of_scroll_region = self.scroll_down_page(driver, self.last_position)
+            sleep(1)
         print("\nTOTAL DUPLICATES: " + str(self.twitter_post.count))
 
     #Method overriding
-    def csv_writer(self):
+    def csv_writer(self, records, mode):
         """
         Writes each tuple stored in twitter_post variable as a row into file
+        
         Each row will be split into columns of Username, Twitter Handle, DateTime and Tweet
         """
-        #temp = []
-        header = ['Username', 'Twitter_Handle', 'DateTime', 'Tweet']
+        header = ('Username', 'Twitter_Handle', 'DateTime', 'Tweet')
 
-        for item in self.twitter_post:
-            temp.append([item])
+        # for item in self.twitter_post:
+        #     header.append([item])
 
-        with open("tweets.csv", "w", newline='', encoding='utf-8') as csv_file:
-            writer = csv.writer(csv_file, delimiter=',')
+        with open("tweets.csv", mode = mode, newline = '', encoding = 'utf-8') as csv_file:
+            writer = csv.writer(csv_file)
             try:
-                writer.writerows(temp)
+                if mode == 'w':
+                    writer.writerows(header)
+                if records:
+                    writer.writerow(records)
             except UnicodeError:
                 pass
             csv_file.close()
@@ -163,6 +168,10 @@ class TwitterScraper(Scraper):
     def generate_tweet_id(self, tweet):
         """ 
         This function converts scraped information of a tweet in tuple form to string
+        
         Done in order to check for duplicate scraped tweets
         """
-        return ''.join(tweet)
+        try:
+            return ''.join(tweet)
+        except TypeError:
+            pass
